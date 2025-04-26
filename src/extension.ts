@@ -5,6 +5,7 @@ import { createHtml } from './modules/createHtml';
 export function activate(context: vscode.ExtensionContext) {
     createConfig().then((result) => {
         const r = result;
+        console.log(r);
         if (r.isCreate || r.isHasConfig) {
             // 注册自定义文本编辑器
             const provider = new createHtml(context.extensionUri, context, r.datas ? r.datas : '');

@@ -18,7 +18,6 @@ interface createConfigParams {
 const createConfig = (): Promise<createConfigParams> => {
     console.log('开始检测工作区...');
     return new Promise((resolve, reject) => {
-        resolve({ isCreate: true });
         // 获取当前工作区
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
