@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 import { TelnetClient } from './telnetClient';
+import { CreateConfig } from './createConfig';
 
 // 判断环境
 const isDevelopment = process.env.NODE_ENV === 'development ';
@@ -10,12 +11,12 @@ console.log('当前环境:', isDevelopment ? '开发环境' : '生产环境');
 class createHtml implements vscode.CustomTextEditorProvider {
     private extensionUri: vscode.Uri;
     private context: vscode.ExtensionContext;
-    private configDatas: any;
+    private configFile: any;
 
-    constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext, configDatas: any) {
+    constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this.extensionUri = extensionUri;
         this.context = context;
-        this.configDatas = configDatas;
+        this.configFile = new CreateConfig();
     }
 
     // 父类的 resolveCustomTextEditor 接口，用于创建自定义文本编辑器
@@ -46,45 +47,66 @@ class createHtml implements vscode.CustomTextEditorProvider {
             // const linkUri = webviewPanel.webview.asWebviewUri(vscode.Uri.file(cssPath));
             // webviewPanel.webview.html = this.getHTML({ js: scriptUri, css: linkUri });
 
-            // 连接到 Telnet 服务器
-            // const telnet = new TelnetClient('mud.pkuxkx.net', 8081);
-            const telnet = new TelnetClient('mud.ren', 6666);
-            telnet
-                .connect()
-                .then(() => {
-                    telnet.onData((muddata) => {
-                        webviewPanel.webview.postMessage({ type: 'mud', data: muddata });
-                    });
-                })
-                .catch((err) => {
-                    vscode.window.showErrorMessage('Telnet connection failed: ' + err.message);
-                });
-
             // 监听来自 Vue 应用的消息
             webviewPanel.webview.onDidReceiveMessage(
                 (message) => {
                     switch (message.type) {
                         case 'command':
-                            telnet.sendData(message.content);
+                            // telnet.sendData(message.content);
+                            break;
+                        case 'config':
+                            console.log('创建配置数据:', message.content);
+                            this.configFile.createConfig(message.content);
+                            // this.connectToServer(webviewPanel, message.content.ip, message.content.port);
+                            break;
+                        case 'delete':
+                            console.log('删除配置数据:', message.content);
+                            this.configFile.deleteConfig(message.content.account);
+                            break;
+                        case 'getConfig':
+                            console.log('获取配置数据');
+                            this.configFile.getConfig().then((configs: any) => {
+                                webviewPanel.webview.postMessage({ type: 'getConfig', data: configs });
+                            });
                             break;
                     }
                 },
                 undefined,
                 this.context.subscriptions // 使用正确的 context
             );
-
-            // 监听 Webview 被销毁的事件
-            webviewPanel.onDidDispose(
-                () => {
-                    telnet.disconnect(); // 断开 Telnet 连接
-                },
-                null,
-                this.context.subscriptions
-            );
         } catch (err) {
             console.error('读取文件失败:', err);
             vscode.window.showErrorMessage('无法读取 index.js 或 index.css 文件');
         }
+    }
+
+    private connectToServer(webviewPanel: vscode.WebviewPanel, serverIp?: string, serverPort?: number) {
+        // 添加默认值或检查参数是否有效
+        const ip = serverIp || '0.0.0.0'; // 提供默认 IP 地址
+        const port = serverPort || 666; // 提供默认端口
+
+        const telnet = new TelnetClient(ip, port);
+        telnet
+            .connect()
+            .then(() => {
+                telnet.onData((muddata) => {
+                    webviewPanel.webview.postMessage({ type: 'mud', data: muddata });
+                });
+            })
+            .catch((err) => {
+                vscode.window.showErrorMessage('Telnet connection failed: ' + err.message);
+            });
+
+        // 监听 Webview 被销毁的事件
+        webviewPanel.onDidDispose(
+            () => {
+                telnet.disconnect(); // 断开 Telnet 连接
+            },
+            null,
+            this.context.subscriptions
+        );
+
+        return telnet;
     }
 
     private getHTML(ipmorts: { js?: string; css?: string }): string {

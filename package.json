@@ -15,20 +15,14 @@
     ],
     "main": "./dist/extension.js",
     "contributes": {
-        "commands": [
-            {
-                "command": "vsmudClient.open",
-                "title": "Mud客户端"
-            }
-        ],
         "languages": [
             {
-                "id": "vsmud",
+                "id": "vmud",
                 "extensions": [
                     ".vmud"
                 ],
                 "aliases": [
-                    "vsmud"
+                    "vmud"
                 ]
             }
         ],
