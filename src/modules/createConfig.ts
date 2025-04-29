@@ -5,37 +5,41 @@ import * as path from 'path';
 import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 
 /**
- * 创建目录并在目录下创建 config.json 文件的返回参数类型
- */
-interface createConfigParams {
-    isCreate?: boolean;
-    datas?: { account: string; pwd: string };
-}
-
-/**
  * 用于创建配置相关目录和文件的类
  */
 export class CreateConfig {
+    // 全局变量，用于存储工作区文件夹信息
+    private wsFolder: vscode.WorkspaceFolder | undefined;
+
     /**
      * 创建目录并在目录下创建 config.json 文件
      * @returns 包含创建结果和配置数据的 Promise
      */
-    constructor() {}
+    constructor() {
+        // 初始化工作区文件夹信息
+        this.wsFolder = vscode.workspace.workspaceFolders?.[0];
+    }
+
+    // 提取获取工作区根路径的方法
+    private getRootPath(): string | undefined {
+        if (!this.wsFolder) {
+            console.log('未找到工作区目录');
+            return undefined;
+        }
+        return this.wsFolder.uri.fsPath;
+    }
 
     /**
      * 获取所有目录下的 config.json 文件内容，排除 logs 目录
      * @returns 包含所有 config.json 文件内容的数组
      */
     public async getConfig() {
-        try {
-            // 获取工作区根路径
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                console.log('未找到工作区目录');
-                return [];
-            }
-            const rootPath = workspaceFolder.uri.fsPath;
+        const rootPath = this.getRootPath();
+        if (!rootPath) {
+            return [];
+        }
 
+        try {
             // 递归遍历目录，查找 config.json 文件
             const configFiles = await this.findConfigFiles(rootPath);
 
@@ -65,15 +69,13 @@ export class CreateConfig {
      * @param account 要删除的目录名称
      */
     public async deleteConfig(account: string) {
+        const rootPath = this.getRootPath();
+        if (!rootPath) {
+            return;
+        }
+
         try {
-            // 获取工作区根路径
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                console.log('未找到工作区目录，无法删除目录');
-                return;
-            }
             // 构建要删除的目录路径
-            const rootPath = workspaceFolder.uri.fsPath;
             const dirPath = path.join(rootPath, account);
 
             // 递归删除目录及其内容
@@ -93,6 +95,18 @@ export class CreateConfig {
         let configFiles: string[] = [];
         const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
+        // 只在根目录下创建logs目录
+        const rootPath = this.getRootPath();
+        if (rootPath && dirPath === rootPath) {
+            const logsPath = path.join(dirPath, 'logs');
+            try {
+                await fs.access(logsPath);
+            } catch {
+                await fs.mkdir(logsPath);
+                console.log(`创建 logs 目录: ${logsPath}`);
+            }
+        }
+
         for (const entry of entries) {
             const entryPath = path.join(dirPath, entry.name);
             if (entry.isDirectory()) {
@@ -109,46 +123,46 @@ export class CreateConfig {
         return configFiles;
     }
 
+    /**
+     * 提取写入配置文件的方法
+     * @param dirPath 目录路径
+     * @param content 配置内容
+     */
+    private async writeConfigFile(dirPath: string, content: any) {
+        const configFilePath = path.join(dirPath, 'config.json');
+        await fs.writeFile(configFilePath, JSON.stringify(content, null, 2));
+        console.log(`文件 ${configFilePath} 创建成功`);
+    }
+
     public async createConfig(content: any) {
-        // 立即调用异步函数来处理文件和目录操作
-        try {
-            const { account } = content;
-            console.log(account);
-            // 使用 workspaceFolders 获取工作区根路径
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
-            // 构建目录路径
-            const dirPath = path.join(rootPath, account);
-
-            // 检查目录是否存在
-            try {
-                await fs.stat(dirPath);
-                console.log(`目录 ${dirPath} 已存在，程序停止执行`);
-                return;
-            } catch (statError: any) {
-                // 若目录不存在，继续执行后续操作
-                if (statError.code !== 'ENOENT') {
-                    throw statError;
-                }
-            }
-
-            // 目录不存在，创建目录
-            await fs.mkdir(dirPath, { recursive: true });
-            console.log(`目录 ${dirPath} 创建成功`);
-
-            // 构建 .shtml 文件路径
-            const shtmlFilePath = path.join(dirPath, `${account}.shtml`);
-            // 创建 .shtml 文件
-            await fs.writeFile(shtmlFilePath, '');
-            console.log(`文件 ${shtmlFilePath} 创建成功`);
-
-            // 构建 config.json 文件路径
-            const configFilePath = path.join(dirPath, 'config.json');
-            // 将 content 数据写入 config.json 文件
-            await fs.writeFile(configFilePath, JSON.stringify(content, null, 2));
-            console.log(`文件 ${configFilePath} 创建成功`);
-        } catch (error) {
-            console.error('创建目录和文件时出错:', error);
+        const rootPath = this.getRootPath();
+        if (!rootPath) {
+            return;
         }
+
+        const { account } = content;
+        console.log(account);
+
+        // 构建目录路径
+        const dirPath = path.join(rootPath, account);
+
+        try {
+            await fs.stat(dirPath);
+            console.log(`目录 ${dirPath} 已存在，复写文件`);
+            await this.writeConfigFile(dirPath, content);
+            return;
+        } catch (statError: any) {
+            // 若目录不存在，继续执行后续操作
+            if (statError.code !== 'ENOENT') {
+                throw statError;
+            }
+        }
+
+        // 目录不存在，创建目录
+        await fs.mkdir(dirPath, { recursive: true });
+        console.log(`目录 ${dirPath} 创建成功`);
+
+        // 写入配置文件
+        await this.writeConfigFile(dirPath, content);
     }
 }
