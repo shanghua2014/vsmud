@@ -12,6 +12,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
     private extUri: vscode.Uri;
     private context: vscode.ExtensionContext;
     private configFile: any;
+    private telnet: TelnetClient | undefined;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this.extUri = extensionUri;
@@ -53,18 +54,23 @@ class createHtml implements vscode.CustomTextEditorProvider {
             // 监听来自 Vue 应用的消息
             wvPanel.webview.onDidReceiveMessage(
                 (message) => {
+                    const { headerTitle, server, port, account, password, name } = message.content;
                     switch (message.type) {
                         case 'command':
-                            // telnet.sendData(message.content);
+                            this.telnet && this.telnet.sendData(message.content);
+                            break;
+                        case 'connect':
+                            this.connectToServer(wvPanel, server, port).then((telnet) => {
+                                this.telnet = telnet;
+                            });
                             break;
                         case 'config':
                             console.log('创建配置数据:', message.content);
                             this.configFile.createConfig(message.content);
-                            // this.connectToServer(wvPanel, message.content.ip, message.content.port);
                             break;
                         case 'delete':
                             console.log('删除配置数据:', message.content);
-                            this.configFile.deleteConfig(message.content.account);
+                            this.configFile.deleteConfig(account);
                             break;
                         case 'getConfig':
                             console.log('获取配置数据');
@@ -84,32 +90,33 @@ class createHtml implements vscode.CustomTextEditorProvider {
     }
 
     private connectToServer(webviewPanel: vscode.WebviewPanel, serverIp?: string, serverPort?: number) {
-        // 添加默认值或检查参数是否有效
-        const ip = serverIp || '0.0.0.0'; // 提供默认 IP 地址
-        const port = serverPort || 666; // 提供默认端口
+        return new Promise<TelnetClient>((resolve, reject) => {
+            // 添加默认值或检查参数是否有效
+            const ip = serverIp || '0.0.0.0'; // 提供默认 IP 地址
+            const port = serverPort || 666; // 提供默认端口
 
-        const telnet = new TelnetClient(ip, port);
-        telnet
-            .connect()
-            .then(() => {
-                telnet.onData((muddata) => {
-                    webviewPanel.webview.postMessage({ type: 'mud', data: muddata });
+            const telnet = new TelnetClient(ip, port);
+            telnet
+                .connect()
+                .then(() => {
+                    telnet.onData((muddata) => {
+                        webviewPanel.webview.postMessage({ type: 'mud', data: muddata });
+                        resolve(telnet);
+                    });
+                })
+                .catch((err) => {
+                    vscode.window.showErrorMessage('Telnet connection failed: ' + err.message);
                 });
-            })
-            .catch((err) => {
-                vscode.window.showErrorMessage('Telnet connection failed: ' + err.message);
-            });
 
-        // 监听 Webview 被销毁的事件
-        webviewPanel.onDidDispose(
-            () => {
-                telnet.disconnect(); // 断开 Telnet 连接
-            },
-            null,
-            this.context.subscriptions
-        );
-
-        return telnet;
+            // 监听 Webview 被销毁的事件
+            webviewPanel.onDidDispose(
+                () => {
+                    telnet.disconnect(); // 断开 Telnet 连接
+                },
+                null,
+                this.context.subscriptions
+            );
+        });
     }
 
     private getHTML(ipmorts: { js?: string; css?: string }): string {
