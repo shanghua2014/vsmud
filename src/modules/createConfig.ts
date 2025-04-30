@@ -67,11 +67,13 @@ export class CreateConfig {
                 // 读取文件内容
                 const fileContent = await fs.readFile(configFilePath, 'utf8');
                 // 解析 JSON 内容
-                return JSON.parse(fileContent);
+                console.log('解析 JSON 内容', JSON.parse(fileContent));
+                return fileContent;
             } catch {
                 // 文件不存在，创建新的 config.json 文件
-                await fs.writeFile(configFilePath, '{}', 'utf8');
-                return '{}';
+                const createData = JSON.stringify({ account: this.openedFile });
+                await fs.writeFile(configFilePath, createData, 'utf8');
+                return createData;
             }
         }
 
@@ -98,6 +100,47 @@ export class CreateConfig {
             return true;
         } catch (error) {
             console.error(`写入文件内容出错: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+    }
+
+    public async deleteFile(account: string) {
+        try {
+            // 获取工作区根目录
+            const wsFolders = vscode.workspace.workspaceFolders;
+            if (!wsFolders) {
+                console.log('未打开工作区，无法删除文件和目录。');
+                return false;
+            }
+            const workspaceRoot = wsFolders[0].uri.fsPath;
+
+            // 拼接目录路径
+            const dirPath = path.join(workspaceRoot, account);
+
+            // 拼接 .vmud 文件路径
+            const vmudFilePath = path.join(workspaceRoot, `${account}.vmud`);
+
+            // 检查并删除 .vmud 文件
+            try {
+                await fs.access(vmudFilePath);
+                await fs.unlink(vmudFilePath);
+                console.log(`已删除 .vmud 文件: ${vmudFilePath}`);
+            } catch {
+                console.log(`未找到 .vmud 文件: ${vmudFilePath}`);
+            }
+
+            // 检查并删除目录
+            try {
+                await fs.access(dirPath);
+                await fs.rm(dirPath, { recursive: true, force: true });
+                console.log(`已删除目录: ${dirPath}`);
+            } catch {
+                console.log(`未找到目录: ${dirPath}`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error(`删除文件和目录出错: ${error instanceof Error ? error.message : String(error)}`);
             return false;
         }
     }

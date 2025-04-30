@@ -63,7 +63,10 @@ class createHtml implements vscode.CustomTextEditorProvider {
                             //     this.telnet = telnet;
                             // });
                             break;
-                        case 'config':
+                        case 'delete':
+                            this.configFile.deleteFile(account);
+                            break;
+                        case 'save':
                             this.configFile.writeFile(message.content);
                             break;
                         case 'getConfig':
