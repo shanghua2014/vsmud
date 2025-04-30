@@ -12,25 +12,27 @@ class createHtml implements vscode.CustomTextEditorProvider {
     private extUri: vscode.Uri;
     private context: vscode.ExtensionContext;
     private configFile: any;
+    private configCotent: object = {};
     private telnet: TelnetClient | undefined;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this.extUri = extensionUri;
         this.context = context;
         this.configFile = new CreateConfig();
+        this.configFile.activate(context).then((configCotent: object) => {
+            this.configCotent = configCotent;
+        });
     }
 
     // 父类的 resolveCustomTextEditor 接口，用于创建自定义文本编辑器
     async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel, _token: vscode.CancellationToken): Promise<void> {
         try {
-            // 缩短变量名
             const wvPanel = webviewPanel;
             wvPanel.webview.options = {
                 enableScripts: true // 允许 Webview 执行脚本
             };
-            let jsPath;
-            let cssPath;
-            // const htmlPath = path.join(this.extUri.fsPath, 'vsmud_vue/dev/index.html');
+
+            let jsPath, cssPath;
             if (isDevelopment) {
                 // 开发环境使用本地调试路径
                 jsPath = path.join(this.extUri.fsPath, 'vsmud_vue/dev/js/main.js');
@@ -46,37 +48,27 @@ class createHtml implements vscode.CustomTextEditorProvider {
 
             wvPanel.webview.html = this.getHTML({ js: jsContent, css: cssContent });
 
-            // 设置 Webview 的 HTML 内容
-            // const scriptUri = wvPanel.webview.asWebviewUri(vscode.Uri.file(jsPath));
-            // const linkUri = wvPanel.webview.asWebviewUri(vscode.Uri.file(cssPath));
-            // wvPanel.webview.html = this.getHTML({ js: scriptUri, css: linkUri });
-
             // 监听来自 Vue 应用的消息
             wvPanel.webview.onDidReceiveMessage(
                 (message) => {
+                    console.log('vscode：来自Vue消息:', message);
                     const { headerTitle, server, port, account, password, name } = message.content;
                     switch (message.type) {
                         case 'command':
-                            this.telnet && this.telnet.sendData(message.content);
+                            // this.telnet && this.telnet.sendData(message.content);
+                            // 打开对应的 .shtml 文件
                             break;
                         case 'connect':
-                            this.connectToServer(wvPanel, server, port).then((telnet) => {
-                                this.telnet = telnet;
-                            });
+                            // this.connectToServer(wvPanel, server, port).then((telnet) => {
+                            //     this.telnet = telnet;
+                            // });
                             break;
                         case 'config':
-                            console.log('创建配置数据:', message.content);
-                            this.configFile.createConfig(message.content);
-                            break;
-                        case 'delete':
-                            console.log('删除配置数据:', message.content);
-                            this.configFile.deleteConfig(account);
+                            this.configFile.writeFile(message.content);
                             break;
                         case 'getConfig':
-                            console.log('获取配置数据');
-                            this.configFile.getConfig().then((configs: any) => {
-                                wvPanel.webview.postMessage({ type: 'getConfig', data: configs });
-                            });
+                            console.log('获取配置数据', this.configCotent);
+                            wvPanel.webview.postMessage({ type: 'getConfig', datas: this.configCotent });
                             break;
                     }
                 },
