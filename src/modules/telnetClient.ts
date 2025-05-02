@@ -14,11 +14,6 @@ export class TelnetClient {
     constructor(private host: string, private port: number) {
         // 创建一个新的网络套接字实例
         this.client = new net.Socket();
-        const iconv = require('iconv-lite'); // 引入 iconv-lite 库
-        this.client.on('data', (data) => {
-            const decodedData = iconv.decode(data, 'UTF-8'); // 使用 iconv-lite 解码 gb2312 编码的数据
-            console.log('Decoded data:', decodedData);
-        });
     }
 
     /**
@@ -75,7 +70,7 @@ export class TelnetClient {
 
     disconnect(): void {
         this.client.end(() => {
-            console.log('Disconnected from Telnet server');
+            console.log('连接已关闭');
         });
     }
 }

@@ -11,33 +11,31 @@ export class CreateConfig {
 
     // 激活扩展时执行的异步方法
     async activate(context: vscode.ExtensionContext) {
-        return new Promise<void>((resolve, reject) => {
-            // 监听文件打开事件
-            const disposable = vscode.workspace.onDidOpenTextDocument(async (document) => {
-                if (document.fileName.endsWith('.vmud')) {
-                    this.openedFile = document.fileName.split('\\');
-                    this.openedFile = this.openedFile[this.openedFile.length - 1].split('.')[0];
+        // 监听文件打开事件
+        const disposable = vscode.workspace.onDidOpenTextDocument(async (document) => {
+            if (document.fileName.endsWith('.vmud')) {
+                this.openedFile = document.fileName.split('\\');
+                this.openedFile = this.openedFile[this.openedFile.length - 1].split('.')[0];
 
-                    try {
-                        // 获取工作区根目录，缩短变量名
-                        const wsFolders = vscode.workspace.workspaceFolders;
-                        if (!wsFolders) {
-                            vscode.window.showWarningMessage('未打开工作区，无法创建目录。');
-                            return;
-                        }
-                        const workspaceRoot = wsFolders[0].uri.fsPath;
-
-                        // 调用封装方法创建目录和文件
-                        await this.getFiles(workspaceRoot, 'logs');
-                        const content = this.getFiles(workspaceRoot, this.openedFile);
-                        resolve(content);
-                    } catch (error) {
-                        vscode.window.showErrorMessage(`操作出错: ${error instanceof Error ? error.message : String(error)}`);
+                try {
+                    // 获取工作区根目录，缩短变量名
+                    const wsFolders = vscode.workspace.workspaceFolders;
+                    if (!wsFolders) {
+                        vscode.window.showWarningMessage('未打开工作区，无法创建目录。');
+                        return;
                     }
-                } else {
-                    console.log(`非 .vmud 文件已打开: ${document.fileName}`);
+                    const workspaceRoot = wsFolders[0].uri.fsPath;
+
+                    // 调用封装方法创建目录和文件
+                    this.getFiles(workspaceRoot, 'logs');
+                    const content = await this.getFiles(workspaceRoot, this.openedFile);
+                    context.globalState.update('configFile', content);
+                } catch (error) {
+                    vscode.window.showErrorMessage(`操作出错: ${error instanceof Error ? error.message : String(error)}`);
                 }
-            });
+            } else {
+                console.log(`非 .vmud 文件已打开: ${document.fileName}`);
+            }
             context.subscriptions.push(disposable);
         });
     }
@@ -48,7 +46,7 @@ export class CreateConfig {
      * @param dirName 目标目录名
      * @returns 若 config.json 文件已存在，返回其内容；否则返回 null
      */
-    public async getFiles(workspaceRoot: string, dirName: string): Promise<any> {
+    private async getFiles(workspaceRoot: string, dirName: string): Promise<any> {
         const targetDirPath = path.join(workspaceRoot, dirName);
 
         // 检查目录是否存在，不存在则创建
@@ -66,8 +64,6 @@ export class CreateConfig {
                 await fs.access(configFilePath);
                 // 读取文件内容
                 const fileContent = await fs.readFile(configFilePath, 'utf8');
-                // 解析 JSON 内容
-                console.log('解析 JSON 内容', JSON.parse(fileContent));
                 return fileContent;
             } catch {
                 // 文件不存在，创建新的 config.json 文件
