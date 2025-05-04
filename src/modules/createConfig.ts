@@ -113,18 +113,6 @@ export class CreateConfig {
             // 拼接目录路径
             const dirPath = path.join(workspaceRoot, account);
 
-            // 拼接 .vmud 文件路径
-            const vmudFilePath = path.join(workspaceRoot, `${account}.vmud`);
-
-            // 检查并删除 .vmud 文件
-            try {
-                await fs.access(vmudFilePath);
-                await fs.unlink(vmudFilePath);
-                console.log(`已删除 .vmud 文件: ${vmudFilePath}`);
-            } catch {
-                console.log(`未找到 .vmud 文件: ${vmudFilePath}`);
-            }
-
             // 检查并删除目录
             try {
                 await fs.access(dirPath);

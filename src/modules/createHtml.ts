@@ -18,10 +18,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this.extUri = extensionUri;
         this.context = context;
-        this.configFile = new CreateConfig();
-        this.configFile.activate(context).then(() => {
-            this.configCotent = this.context.globalState.get('configFile');
-        });
+        this.getConfig();
     }
 
     // 父类的 resolveCustomTextEditor 接口，用于创建自定义文本编辑器
@@ -51,12 +48,18 @@ class createHtml implements vscode.CustomTextEditorProvider {
             // 监听来自 Vue 应用的消息
             wvPanel.webview.onDidReceiveMessage(
                 async (message) => {
-                    const { headerTitle, ip, port, account, password, name } = message.content;
-                    console.log(message.content);
+                    const { ip, port, account } = message.content;
+                    console.log('命令：', message.content);
                     switch (message.type) {
+                        case 'command':
+                            if (message.content === 'sk') {
+                                message.content = 'skills';
+                            }
+                            this.telnet?.sendData(message.content);
+                            break;
                         case 'connect':
                             // 连接服务器
-                            await this.telnetToServe(ip, port, wvPanel);
+                            this.telnet = await this.telnetToServe(ip, port, wvPanel);
                             break;
                         case 'delete':
                             this.configFile.deleteFile(account);
@@ -79,13 +82,21 @@ class createHtml implements vscode.CustomTextEditorProvider {
         }
     }
 
+    private async getConfig() {
+        this.configFile = new CreateConfig();
+        this.configFile.activate(this.context).then(() => {
+            this.configCotent = this.context.globalState.get('configFile');
+        });
+    }
+
     private async telnetToServe(ip: string, port: number, wvPanel: vscode.WebviewPanel): Promise<any> {
         const client = new TelnetClient(ip, port);
         try {
             // 连接到服务器
             await client.connect();
             client.onData((data) => {
-                wvPanel.webview.postMessage({ type: 'mud', datas: data });
+                console.log('mud数据：', data.toString());
+                wvPanel.webview.postMessage({ type: 'mud', datas: data.toString() });
             });
             // 发送消息
         } catch (error) {
@@ -99,9 +110,10 @@ class createHtml implements vscode.CustomTextEditorProvider {
             null,
             this.context.subscriptions
         );
+        return client;
     }
 
-    private getHTML(ipmorts: { js?: string; css?: string }): string {
+    private getHTML(imports: { js?: string; css?: string }): string {
         let html = `
         <!DOCTYPE html>
             <html lang="en" class="dark">
@@ -109,12 +121,12 @@ class createHtml implements vscode.CustomTextEditorProvider {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>VSMUD客户端</title>
-                <style>${ipmorts.css}</style>
+                <style>${imports.css}</style>
                 <script>window.customParent = acquireVsCodeApi();</script>
             </head>
             <body>
                 <div id="app"></div>
-                <script>${ipmorts.js}</script>
+                <script>${imports.js}</script>
             </body>
         </html>`;
         return html;

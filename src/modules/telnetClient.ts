@@ -53,7 +53,7 @@ export class TelnetClient {
         }
         // 向服务器发送数据，并在数据末尾添加回车换行符
         console.log(`发给服务器: ${data}`);
-        this.client.write(data + '\r\n');
+        this.client.write(`${data}\r\n`);
     }
 
     /**

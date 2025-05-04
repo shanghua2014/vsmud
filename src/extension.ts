@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { createHtml } from './modules/createHtml';
 
 let disposable: vscode.Disposable;
-// 保存 createHtml 实例的引用
 let htmlProvider: InstanceType<typeof createHtml> | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -13,9 +12,11 @@ export function activate(context: vscode.ExtensionContext) {
             enableScripts: true, // 允许 Webview 执行脚本
             enableCommandUris: true, // 允许使用 vscode://command 协议的 URI
             enableFindWidget: true, // 显示查找小部件
-            retainContextWhenHidden: true // 隐藏时保留上下文
+            retainContextWhenHidden: true, // 隐藏时保留上下文
+            enableClipboardSupport: true // 启用剪贴板支持，允许复制和粘贴
         } as vscode.WebviewOptions & vscode.WebviewPanelOptions // 类型断言
     });
+
     context.subscriptions.push(disposable);
 }
 
