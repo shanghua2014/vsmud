@@ -1,5 +1,5 @@
-// 导入 Node.js 的 net 模块，该模块提供了创建网络套接字的功能
 import * as net from 'net';
+import StringDecoder from 'string_decoder';
 
 export class TelnetClient {
     // 私有属性，存储一个 net.Socket 实例，用于与 Telnet 服务器进行网络通信
@@ -53,7 +53,9 @@ export class TelnetClient {
         }
         // 向服务器发送数据，并在数据末尾添加回车换行符
         console.log(`发给服务器: ${data}`);
-        this.client.write(`${data}\r\n`);
+        const decoder = new StringDecoder.StringDecoder('utf8');
+        const str = decoder.write(data);
+        this.client.write(`${str}\r\n`);
     }
 
     /**

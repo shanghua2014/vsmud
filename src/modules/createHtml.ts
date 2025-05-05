@@ -2,28 +2,30 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 import { TelnetClient } from './telnetClient';
-import { CreateConfig } from './createConfig';
+// import { CreateConfig } from './createConfig';
+import { Files } from './files';
 
 // 判断环境
 const isDevelopment = process.env.NODE_ENV === 'development ';
 console.log('当前环境:', isDevelopment ? '开发环境' : '生产环境');
-
 class createHtml implements vscode.CustomTextEditorProvider {
     private extUri: vscode.Uri;
     private context: vscode.ExtensionContext;
     private configFile: any;
-    private configCotent: object | undefined = {};
+    private files: any;
+    private fileContent: any;
     private telnet: TelnetClient | undefined;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this.extUri = extensionUri;
         this.context = context;
-        this.getConfig();
+        this.fileContent = '';
     }
 
     // 父类的 resolveCustomTextEditor 接口，用于创建自定义文本编辑器
     async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel, _token: vscode.CancellationToken): Promise<void> {
         try {
+            this.fileContent = '';
             const wvPanel = webviewPanel;
             wvPanel.webview.options = {
                 enableScripts: true // 允许 Webview 执行脚本
@@ -49,7 +51,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
             wvPanel.webview.onDidReceiveMessage(
                 async (message) => {
                     const { ip, port, account } = message.content;
-                    console.log('命令：', message.content);
+                    console.log('命令：', message);
                     switch (message.type) {
                         case 'command':
                             if (message.content === 'sk') {
@@ -61,15 +63,13 @@ class createHtml implements vscode.CustomTextEditorProvider {
                             // 连接服务器
                             this.telnet = await this.telnetToServe(ip, port, wvPanel);
                             break;
-                        case 'delete':
-                            this.configFile.deleteFile(account);
-                            break;
                         case 'save':
-                            this.configFile.writeFile(message.content);
+                            this.files.writeFile(document, message.content);
                             break;
-                        case 'getConfig':
-                            this.configCotent = this.context.globalState.get('configFile');
-                            wvPanel.webview.postMessage({ type: 'getConfig', datas: this.configCotent });
+                        case 'getAccount':
+                            this.files = new Files(this.context);
+                            this.fileContent = await this.files.openFile(document);
+                            wvPanel.webview.postMessage({ type: 'getConfig', datas: this.fileContent });
                             break;
                     }
                 },
@@ -82,20 +82,13 @@ class createHtml implements vscode.CustomTextEditorProvider {
         }
     }
 
-    private async getConfig() {
-        this.configFile = new CreateConfig();
-        this.configFile.activate(this.context).then(() => {
-            this.configCotent = this.context.globalState.get('configFile');
-        });
-    }
-
     private async telnetToServe(ip: string, port: number, wvPanel: vscode.WebviewPanel): Promise<any> {
         const client = new TelnetClient(ip, port);
         try {
             // 连接到服务器
             await client.connect();
             client.onData((data) => {
-                console.log('mud数据：', data.toString());
+                // console.log('mud数据：', data.toString());
                 wvPanel.webview.postMessage({ type: 'mud', datas: data.toString() });
             });
             // 发送消息
@@ -130,13 +123,6 @@ class createHtml implements vscode.CustomTextEditorProvider {
             </body>
         </html>`;
         return html;
-    }
-
-    // 自定义清理方法
-    dispose() {
-        // 执行清理操作，如取消订阅事件、关闭文件等
-        console.log('createHtml 实例已清理');
-        this.configFile = null;
     }
 }
 export { createHtml };

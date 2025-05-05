@@ -29,15 +29,15 @@ export class CreateConfig {
                     // 调用封装方法创建目录和文件
                     this.getFiles(workspaceRoot, 'logs');
                     const content = await this.getFiles(workspaceRoot, this.openedFile);
-                    context.globalState.update('configFile', content);
+                    context.globalState.update('configContent', content.configContent);
                 } catch (error) {
                     vscode.window.showErrorMessage(`操作出错: ${error instanceof Error ? error.message : String(error)}`);
                 }
             } else {
                 console.log(`非 .vmud 文件已打开: ${document.fileName}`);
             }
-            context.subscriptions.push(disposable);
         });
+        context.subscriptions.push(disposable);
     }
 
     /**
@@ -59,20 +59,25 @@ export class CreateConfig {
         // 如果目录是 this.openedFile 对应的目录，创建或读取 config.json
         if (dirName === this.openedFile) {
             const configFilePath = path.join(targetDirPath, 'config.json');
+            const triggerFilePath = path.join(targetDirPath, 'trigger.js');
             try {
                 // 检查 config.json 文件是否存在
                 await fs.access(configFilePath);
+                await fs.access(triggerFilePath);
                 // 读取文件内容
-                const fileContent = await fs.readFile(configFilePath, 'utf8');
-                return fileContent;
+                const configContent = await fs.readFile(configFilePath, 'utf8');
+                const triggerContent = await fs.readFile(triggerFilePath, 'utf8');
+                console.log('configContent: ', configContent);
+                return { configContent: configContent, triggerContent: triggerContent };
             } catch {
                 // 文件不存在，创建新的 config.json 文件
                 const createData = JSON.stringify({ account: this.openedFile });
+                console.log('createData: ', createData);
                 await fs.writeFile(configFilePath, createData, 'utf8');
+                await fs.writeFile(triggerFilePath, 'function abc(){}', 'utf8');
                 return createData;
             }
         }
-
         return null;
     }
 
@@ -96,35 +101,6 @@ export class CreateConfig {
             return true;
         } catch (error) {
             console.error(`写入文件内容出错: ${error instanceof Error ? error.message : String(error)}`);
-            return false;
-        }
-    }
-
-    public async deleteFile(account: string) {
-        try {
-            // 获取工作区根目录
-            const wsFolders = vscode.workspace.workspaceFolders;
-            if (!wsFolders) {
-                console.log('未打开工作区，无法删除文件和目录。');
-                return false;
-            }
-            const workspaceRoot = wsFolders[0].uri.fsPath;
-
-            // 拼接目录路径
-            const dirPath = path.join(workspaceRoot, account);
-
-            // 检查并删除目录
-            try {
-                await fs.access(dirPath);
-                await fs.rm(dirPath, { recursive: true, force: true });
-                console.log(`已删除目录: ${dirPath}`);
-            } catch {
-                console.log(`未找到目录: ${dirPath}`);
-            }
-
-            return true;
-        } catch (error) {
-            console.error(`删除文件和目录出错: ${error instanceof Error ? error.message : String(error)}`);
             return false;
         }
     }
