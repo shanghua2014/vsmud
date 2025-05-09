@@ -3,6 +3,7 @@
     "displayName": "vsmud",
     "description": "Mud客户端",
     "version": "0.0.1",
+    "types": "./script/trigger.d.ts",
     "engines": {
         "vscode": "^1.99.0"
     },
@@ -11,7 +12,7 @@
     ],
     "activationEvents": [
         "onLanguage:vmud",
-        "onFileSystem:*.vmud,*.vmud.shtml"
+        "onFileSystem:*.vmud"
     ],
     "main": "./dist/extension.js",
     "contributes": {

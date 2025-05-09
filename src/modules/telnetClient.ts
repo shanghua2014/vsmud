@@ -52,10 +52,7 @@ export class TelnetClient {
             return;
         }
         // 向服务器发送数据，并在数据末尾添加回车换行符
-        console.log(`发给服务器: ${data}`);
-        const decoder = new StringDecoder.StringDecoder('utf8');
-        const str = decoder.write(data);
-        this.client.write(`${str}\r\n`);
+        this.client.write(`${data}\r\n`);
     }
 
     /**
@@ -64,9 +61,12 @@ export class TelnetClient {
      */
     onData(callback: (data: string) => void): void {
         // 监听套接字的 data 事件
+        console.log('开始监听数据');
         this.client.on('data', (data) => {
             // 当接收到数据时，将数据转换为字符串并调用回调函数
-            callback(data.toString());
+            const decoder = new StringDecoder.StringDecoder('utf8');
+            const str = decoder.write(data);
+            callback(str);
         });
     }
 

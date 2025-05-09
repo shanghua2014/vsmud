@@ -46,48 +46,55 @@ export class Files {
 
         const triggerFilePath = path.join(targetDirPath, 'trigger.js');
         // 检查 trigger.js 文件是否存在
-        if (document) {
-            try {
-                await fs.access(triggerFilePath);
-            } catch {
-                console.log('trigger 文件不存在，创建文件');
-                const triggerContent = `
-export const Triggers = {
-    this.action.push({
-        trigger:'',
-        name:'',
-        patterns:'',
-        onSuccess:()=>{
-            console.log('触发成功'); 
+        try {
+            await fs.access(triggerFilePath);
+        } catch {
+            console.log('trigger 文件不存在，创建文件');
+            const triggerContent = `
+export const Triggers = () => {
+    // 自定义一个数组，用于存储触发器
+    const t = [];
+    t.push({
+        name: 'name',
+        reg: '触发内容',
+        group: 'group',
+        onSuccess: ()=>{
+            return 'look';
         }
-    })
-} `;
-                await fs.writeFile(triggerFilePath, triggerContent, 'utf8');
-            }
+    });
+    t.push({
+        name: 'name',
+        reg: '触发内容',
+        group: 'group',
+        cmd: 'look'
+    });
+    return t;
+}`;
+            await fs.writeFile(triggerFilePath, triggerContent, 'utf8');
+        }
 
-            // 检查 alias.js 文件是否存在
-            const aliasFilePath = path.join(targetDirPath, 'alias.js');
-            try {
-                await fs.access(aliasFilePath);
-            } catch {
-                console.log('alias 文件不存在，创建文件');
-                await fs.writeFile(aliasFilePath, '{}', 'utf8');
-            }
+        // 检查 alias.js 文件是否存在
+        const aliasFilePath = path.join(targetDirPath, 'alias.js');
+        try {
+            await fs.access(aliasFilePath);
+        } catch {
+            console.log('alias 文件不存在，创建文件');
+            await fs.writeFile(aliasFilePath, '{}', 'utf8');
+        }
 
-            // 检查 config.json 文件是否存在
-            const configFilePath = path.join(targetDirPath, 'config.json');
-            try {
-                await fs.access(configFilePath);
-                // 获取文件内容并返回
-                const fileContent = await fs.readFile(configFilePath, 'utf8');
-                // console.log('config 文件内容：', fileContent);
-                return fileContent;
-            } catch {
-                console.log('config 文件不存在，创建文件');
-                const fielContent = JSON.stringify({ account: dirName });
-                await fs.writeFile(configFilePath, fielContent, 'utf8');
-                return fielContent;
-            }
+        // 检查 config.json 文件是否存在
+        const configFilePath = path.join(targetDirPath, 'config.json');
+        try {
+            await fs.access(configFilePath);
+            // 获取文件内容并返回
+            const fileContent = await fs.readFile(configFilePath, 'utf8');
+            // console.log('config 文件内容：', fileContent);
+            return fileContent;
+        } catch {
+            console.log('config 文件不存在，创建文件');
+            const fielContent = JSON.stringify({ account: dirName });
+            await fs.writeFile(configFilePath, fielContent, 'utf8');
+            return fielContent;
         }
     }
 
@@ -107,8 +114,6 @@ export const Triggers = {
             }
 
             // 拼接 config.json 文件路径
-            console.log(workspaceRoot);
-            console.log(this.fname);
             const configFilePath = path.join(workspaceRoot, this.fname, 'config.json');
 
             // 将内容转换为格式化的 JSON 字符串并写入文件
@@ -120,5 +125,53 @@ export const Triggers = {
             console.error(`写入文件内容出错: ${error instanceof Error ? error.message : String(error)}`);
             return false;
         }
+    }
+
+    public async copyFile(document: vscode.TextDocument) {
+        return new Promise(async (resolve, reject) => {
+            if (document.languageId !== 'vmud') {
+                console.log(`非 .vmud 文件，无法复制: ${document.fileName}`);
+                return;
+            }
+
+            const wsFolders = vscode.workspace.workspaceFolders;
+            if (!wsFolders) {
+                vscode.window.showWarningMessage('未打开工作区，无法复制文件。');
+                return;
+            }
+
+            const workspaceRoot = wsFolders[0].uri.fsPath;
+            const file = document.fileName.split('\\');
+            const fileName = file[file.length - 1].split('.')[0];
+
+            const sourceDir = path.join(workspaceRoot, fileName);
+            const targetDir = path.join(__dirname, '../../vsmud/script');
+
+            try {
+                // 读取源目录下的所有文件和文件夹
+                const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isFile()) {
+                        const sourcePath = path.join(sourceDir, entry.name);
+                        const targetPath = path.join(targetDir, entry.name);
+                        fs.access(sourcePath).then(async () => {
+                            if (entry.name.endsWith('.js')) {
+                                try {
+                                    // fs.copyFile(sourcePath, targetPath);
+                                    console.log(`${entry.name} 复写成功`);
+                                    const fileContent = await fs.readFile(sourcePath, 'utf8');
+                                    await fs.writeFile(targetPath, fileContent);
+                                    resolve(true);
+                                } catch (error) {
+                                    console.error(`复制 ${entry.name} 失败: ${error instanceof Error ? error.message : String(error)}`);
+                                }
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`读取源目录失败: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        });
     }
 }
