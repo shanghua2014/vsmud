@@ -6,7 +6,7 @@ module.exports = {
 		const t = [];
 		t.push({
 			name: "哈哈",
-			reg: "333",
+			reg: "4444",
 			group: "sys",
 			onSuccess: () => {
 				return "hehe";
