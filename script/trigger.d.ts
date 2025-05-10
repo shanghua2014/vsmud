@@ -13,8 +13,8 @@
  * @example const triggers = Triggers()
  */
 declare type TRIGGER = () => Array<{
-    name: string;
-    group: string;
+    name?: string;
+    group?: string;
     reg: string;
     cmd?: string;
     onSuccess?: () => string;
