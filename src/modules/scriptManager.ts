@@ -12,7 +12,7 @@ module.exports = {
     Triggers: () => {
         const tr = [];
         tr.push({
-            name: "触发成功执行回调",
+            name: "名称",
             reg: "触发语句",
             group: "sys",
             enable: true,
@@ -40,16 +40,9 @@ module.exports = {
     Aliases: () => {
         const a = [];
         a.push({
-            name: "触发成功执行回调",
-            reg: "触发语句",
+            name: "别名名称",
+            cmd: "命令",
             group: "sys",
-            enable: true,
-        });
-        a.push({
-            name: "触发成功执行命令",
-            reg: "触发器 action",
-            group: "触发器 group",
-            cmd: "look",
             enable: true,
         });
         return a;
@@ -64,7 +57,7 @@ module.exports = {
     public timers(): string {
         return `
 module.exports = {
-    Aliases: () => {
+    Timers: () => {
         const ti = [];
         ti.push({
             name: "触发成功执行回调",

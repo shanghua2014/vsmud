@@ -49,23 +49,26 @@ export class Files {
      * @returns 文件内容
      */
     private async findAndMake(workspaceRoot: string, dirName: string, document?: vscode.TextDocument): Promise<any> {
-        const targetDirPath = path.join(workspaceRoot, dirName);
-        await this.ensureDirectoryExists(targetDirPath);
+        const targetDirPath = path.join(workspaceRoot, dirName); // 构建目标目录路径
+        await this.ensureDirectoryExists(targetDirPath); // 确保目标目录存在
 
+        // 定义需要创建的文件列表
         const filesToCreate = [
-            { name: 'trigger.js', content: this.scriptManager.timers() },
-            { name: 'alias.js', content: this.scriptManager.alias() },
-            // { name: 'timer.js', content: this.scriptManager.timers() },
-            { name: 'config.json', content: JSON.stringify({ account: dirName }) }
+            { name: 'trigger.js', content: this.scriptManager.triggers() }, // 触发器脚本文件
+            { name: 'alias.js', content: this.scriptManager.alias() }, // 别名脚本文件
+            { name: 'config.json', content: JSON.stringify({ account: dirName }) } // 配置文件
         ];
 
+        // 遍历文件列表，创建或更新文件
         for (const file of filesToCreate) {
-            const filePath = path.join(targetDirPath, file.name);
-            await this.ensureFileExists(filePath, file.content);
+            const filePath = path.join(targetDirPath, file.name); // 构建文件路径
+            const gitFilePath = path.join(targetDirPath, file.name + '.git'); // 构建 .git 文件路径，不创建.git 打开文件会报错
+            await this.ensureFileExists(filePath, file.content); // 确保文件存在并写入内容
+            await this.ensureFileExists(gitFilePath, ''); // 创建空的 .git 文件
         }
 
-        const configFilePath = path.join(targetDirPath, 'config.json');
-        return await this.readFile(configFilePath);
+        const configFilePath = path.join(targetDirPath, 'config.json'); // 构建配置文件路径
+        return await this.readFile(configFilePath); // 读取并返回配置文件内容
     }
 
     /**
@@ -153,15 +156,13 @@ export class Files {
             return false;
         }
 
+        let success = false;
         for (const entry of entries) {
             if (entry.isFile() && entry.name.endsWith('.js')) {
                 const sourcePath = path.join(sourceDir, entry.name);
                 const targetPath = path.join(targetDir, entry.name);
 
                 const [content, readErr] = await handleError(fs.readFile(sourcePath, 'utf8'));
-                if (readErr) {
-                    continue;
-                }
                 if (readErr || content === null) {
                     continue;
                 }
@@ -171,11 +172,12 @@ export class Files {
                     continue;
                 }
 
-                console.log(`${entry.name} 复写成功`);
-                return true;
+                console.log(`${entry.name} 复制成功`);
+                success = true;
             }
         }
-        return false;
+
+        return success;
     }
 
     /**

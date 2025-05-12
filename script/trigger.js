@@ -1,23 +1,24 @@
 /** @format */
 
-// 将 ES Module 语法改为 CommonJS 语法
 module.exports = {
 	Triggers: () => {
-		const t = [];
-		t.push({
-			name: "哈哈",
-			reg: "4444",
+		const tr = [];
+		tr.push({
+			name: "名称",
+			reg: "你「哈哈」大笑几声。",
 			group: "sys",
+			enable: true,
 			onSuccess: () => {
-				return "hehe";
+				return "xixi";
 			},
 		});
-		t.push({
-			name: "触发器 name",
+		tr.push({
+			name: "触发成功执行命令",
 			reg: "触发器 action",
 			group: "触发器 group",
+			enable: true,
 			cmd: "look",
 		});
-		return t;
+		return tr;
 	},
 };

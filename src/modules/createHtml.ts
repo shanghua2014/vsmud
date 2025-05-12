@@ -5,7 +5,8 @@ import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 import { TelnetClient } from './telnetClient';
 import { Files } from './files';
 import { Triggers } from '../../script/trigger'; // 导入 Triggers 函数
-import { handleError } from '../tools/utils';
+// 引入 handleError 和 asciiToString 函数
+import { handleError, stripAnsi } from '../tools/utils';
 
 // 判断环境
 console.log('当前环境:', process.env.NODE_ENV);
@@ -59,7 +60,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
         // 从模块导出中获取更新后的触发器配置并赋值给类的 triggers 属性
         this.triggers = module.exports.Triggers();
         // 打印重新加载成功的日志以及更新后的触发器配置
-        console.log('Triggers 已重新加载', this.triggers);
+        // console.log('Triggers 已重新加载', this.triggers);
 
         // 重新加载成功，返回 true
         return true;
@@ -142,27 +143,50 @@ class createHtml implements vscode.CustomTextEditorProvider {
         return isDevelopment ? path.join(this.extUri.fsPath, 'vsmud_vue/dev', fileName) : path.join(this.extUri.fsPath, 'vsmud_vue/dist', fileName);
     }
 
+    /**
+     * 连接到 Telnet 服务器
+     * @param ip - Telnet 服务器的 IP 地址
+     * @param port - Telnet 服务器的端口号
+     * @param wvPanel - 用于显示信息的 Webview 面板
+     * @returns 一个已连接的 Telnet 客户端实例
+     */
     private async telnetToServe(ip: string, port: number, wvPanel: vscode.WebviewPanel): Promise<TelnetClient> {
+        // 创建一个 Telnet 客户端实例，传入服务器 IP 地址和端口号
         const client = new TelnetClient(ip, port);
+        // 异步连接到 Telnet 服务器
         await client.connect();
 
+        // 监听 Telnet 客户端接收到的数据事件
         client.onData(async (data) => {
+            // 打印接收到的 MUD 数据
+            console.log('mud数据：', data);
+            // 调用封装后的 asciiToString 函数
+            const normalStr = stripAnsi(data);
+            // 遍历所有触发器
             this.triggers.forEach((tri: any) => {
+                // 根据触发器的正则表达式创建一个正则对象
                 const reg = new RegExp(tri.reg);
-                if (reg.test(data)) {
+                // 检查接收到的数据是否匹配触发器的正则表达式
+                if (reg.test(normalStr)) {
+                    let cmd: any = '';
                     if (tri.cmd) {
-                        client.sendData(`${tri.cmd}\r\n`);
+                        cmd = `${tri.cmd}`;
                     }
                     if (tri.onSuccess) {
-                        client.sendData(`${tri.onSuccess()}\r\n`);
+                        cmd = `${tri.onSuccess()}`;
                     }
+                    cmd += '\r\n';
+                    wvPanel.webview.postMessage({ type: 'cmd', datas: cmd });
                 }
             });
+            // 将接收到的 MUD 数据发送到 Webview 面板
             wvPanel.webview.postMessage({ type: 'mud', datas: data });
         });
 
+        // 监听 Webview 面板关闭事件，当面板关闭时断开 Telnet 连接
         wvPanel.onDidDispose(() => client.disconnect(), null, this.context.subscriptions);
 
+        // 返回已连接的 Telnet 客户端实例
         return client;
     }
 
