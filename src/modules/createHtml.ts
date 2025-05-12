@@ -8,7 +8,8 @@ import { Triggers } from '../../script/trigger'; // 导入 Triggers 函数
 import { handleError } from '../tools/utils';
 
 // 判断环境
-const isDevelopment = process.env.NODE_ENV === 'development ';
+console.log('当前环境:', process.env.NODE_ENV);
+const isDevelopment = process.env.NODE_ENV === 'development';
 console.log('当前环境:', isDevelopment ? '开发环境' : '生产环境');
 
 /**
@@ -31,21 +32,36 @@ class createHtml implements vscode.CustomTextEditorProvider {
         this.files = new Files(context);
     }
 
+    /**
+     * 重新加载触发器配置
+     * 该方法会读取触发器脚本文件，执行脚本并更新当前的触发器配置
+     * @returns 重新加载成功返回 true，出现错误返回 null
+     */
     private async reloadTriggers(): Promise<boolean | null> {
+        // 构建触发器脚本文件的路径
         const targetPath = path.join(__dirname, '../../vsmud/script/trigger.js');
 
+        // 异步读取触发器脚本文件内容
         const [code, err] = await handleError(fs.readFile(targetPath, 'utf8'));
+        // 若读取过程中出现错误，返回 null
         if (err) {
             return null;
         }
 
+        // 初始化一个模拟的 Node.js 模块对象，用于执行脚本时存储导出内容
         const module: { exports: { Triggers: () => any } } = { exports: { Triggers: () => [] } };
+        // 创建一个 vm.Script 实例，用于后续在隔离环境中执行脚本
         const script = new vm.Script(code!);
+        // 创建一个上下文对象，模拟 Node.js 环境，包含 module、require 和 exports
         const context = vm.createContext({ module, require, exports: module.exports });
+        // 在创建的上下文中执行脚本
         script.runInContext(context);
+        // 从模块导出中获取更新后的触发器配置并赋值给类的 triggers 属性
         this.triggers = module.exports.Triggers();
+        // 打印重新加载成功的日志以及更新后的触发器配置
         console.log('Triggers 已重新加载', this.triggers);
 
+        // 重新加载成功，返回 true
         return true;
     }
 
