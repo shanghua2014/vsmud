@@ -5,6 +5,8 @@ export class TelnetClient {
     // 私有属性，存储一个 net.Socket 实例，用于与 Telnet 服务器进行网络通信
     private client: net.Socket;
     private isConnected: boolean = false;
+    // 存储 data 事件监听器
+    private dataListener?: (data: Buffer) => void;
 
     /**
      * 构造函数，初始化 Telnet 客户端。
@@ -20,7 +22,7 @@ export class TelnetClient {
      * 连接到 Telnet 服务器。
      * @returns 一个 Promise，当连接成功时 resolve，连接失败时 reject 并返回错误信息。
      */
-    connect(): Promise<void> {
+    public connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             // 尝试连接到指定的 Telnet 服务器
             this.client.connect(this.port, this.host, () => {
@@ -46,7 +48,7 @@ export class TelnetClient {
      * 向 Telnet 服务器发送数据。
      * @param data - 要发送的字符串数据，会自动在末尾添加换行符。
      */
-    sendData(data: string): void {
+    public sendData(data: string): void {
         if (!this.isConnected) {
             console.error('未连接到服务器，无法发送数据');
             return;
@@ -59,18 +61,29 @@ export class TelnetClient {
      * 监听来自 Telnet 服务器的数据。
      * @param callback - 当接收到数据时调用的回调函数，参数为接收到的字符串数据。
      */
-    onData(callback: (data: string) => void): void {
-        // 监听套接字的 data 事件
-        console.log('开始监听数据');
-        this.client.on('data', (data) => {
+    public onData(callback: (data: string) => void): void {
+        // 定义 data 事件监听器
+        this.dataListener = (data) => {
             // 当接收到数据时，将数据转换为字符串并调用回调函数
             const decoder = new StringDecoder.StringDecoder('utf8');
             const str = decoder.write(data);
             callback(str);
-        });
+        };
+        // 监听套接字的 data 事件
+        this.client.on('data', this.dataListener);
     }
 
-    disconnect(): void {
+    /**
+     * 移除 data 事件监听器。
+     */
+    public removeData(): void {
+        if (this.dataListener) {
+            this.client.removeListener('data', this.dataListener);
+            this.dataListener = undefined;
+        }
+    }
+
+    public disconnect(): void {
         this.client.end(() => {
             console.log('连接已关闭');
         });

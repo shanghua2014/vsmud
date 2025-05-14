@@ -5,8 +5,13 @@ import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 import { TelnetClient } from './telnetClient';
 import { Files } from './files';
 import { Triggers } from '../../script/trigger'; // 导入 Triggers 函数
-// 引入 handleError 和 asciiToString 函数
 import { handleError, stripAnsi } from '../tools/utils';
+import { Commands } from './commands';
+
+/**
+ * 定义一个接口，用于描述消息的结构
+ * 该接口包含一个 content 属性，用于存储消息的内容
+ */
 
 // 判断环境
 console.log('当前环境:', process.env.NODE_ENV);
@@ -24,6 +29,8 @@ class createHtml implements vscode.CustomTextEditorProvider {
     private telnet: TelnetClient | undefined; // Telnet 客户端
     private triggers: any; // 触发器
     private files: Files; // 文件操作实例
+    private document: vscode.TextDocument;
+    private commands: any;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this.extUri = extensionUri;
@@ -31,6 +38,8 @@ class createHtml implements vscode.CustomTextEditorProvider {
         this.fileContent = '';
         this.triggers = Triggers();
         this.files = new Files(context);
+        this.document = '' as any;
+        this.commands = new Commands();
     }
 
     /**
@@ -67,28 +76,55 @@ class createHtml implements vscode.CustomTextEditorProvider {
     }
 
     private messageHandlers: { [key: string]: (message: any, document: vscode.TextDocument, wvPanel: vscode.WebviewPanel) => Promise<void> | void } = {
-        command: async (message, document, wvPanel) => {
-            if (/^#[a-z]{2}/.test(message.content)) {
-                if (message.content === '#reload' || message.content === '#re') {
-                    await this.files.copyFile(document);
-                    await this.reloadTriggers();
+        // 发送命令
+        // command: async (message) => {
+        //     if (/^#[a-z]{2}/.test(message.content)) {
+        //         if (message.content === '#reload' || message.content === '#re') {
+        //             await this.files.copyFile(this.document);
+        //             await this.reloadTriggers();
+        //         }
+        //     } else {
+        //         this.telnet?.sendData(message.content);
+        //     }
+        // },
+        // 执行命令
+        command: async (message: any, document: vscode.TextDocument, wvPanel: vscode.WebviewPanel) => {
+            await this.commands.command({
+                message: message,
+                files: this.files,
+                telnet: this.telnet,
+                reload: () => {
+                    this.reloadTriggers();
+                },
+                reconnect: () => {
+                    this.telnetToServe(message.content.ip, message.content.port, wvPanel);
                 }
-            } else {
-                this.telnet?.sendData(message.content);
-            }
+            });
         },
+        // 连接mud服务器
         connect: async (message, document, wvPanel) => {
             const { ip, port } = message.content;
             this.telnet = await this.telnetToServe(ip, port, wvPanel);
         },
-        save: async (message, document, wvPanel) => {
+        // 保存登录信息
+        saveAccount: async (message, document, wvPanel) => {
             this.files.writeFile(document, message.content);
         },
+        // 获取登录信息
         getAccount: async (message, document, wvPanel) => {
             this.fileContent = await this.files.openFile(document);
             wvPanel.webview.postMessage({ type: 'getConfig', datas: this.fileContent });
         }
     };
+
+    /**
+     * 获取环境路径
+     * @param fileName 文件名
+     * @returns 文件路径
+     */
+    private getEnv(fileName: string): string {
+        return isDevelopment ? path.join(this.extUri.fsPath, 'vsmud_vue/dev', fileName) : path.join(this.extUri.fsPath, 'vsmud_vue/dist', fileName);
+    }
 
     /**
      * 解析自定义文本编辑器
@@ -99,10 +135,11 @@ class createHtml implements vscode.CustomTextEditorProvider {
     async resolveCustomTextEditor(document: vscode.TextDocument, webviewPanel: vscode.WebviewPanel, _token: vscode.CancellationToken): Promise<void> {
         const wvPanel = webviewPanel;
         wvPanel.webview.options = { enableScripts: true };
+        this.document = document;
 
         // 加载 JS 和 CSS 文件内容
-        const [jsContent, jsErr] = await handleError(fs.readFile(this.getFilePath('js/main.js'), 'utf8'));
-        const [cssContent, cssErr] = await handleError(fs.readFile(this.getFilePath('css/main.css'), 'utf8'));
+        const [jsContent, jsErr] = await handleError(fs.readFile(this.getEnv('js/main.js'), 'utf8'));
+        const [cssContent, cssErr] = await handleError(fs.readFile(this.getEnv('css/main.css'), 'utf8'));
 
         if (jsErr || cssErr) {
             vscode.window.showErrorMessage('无法读取 index.js 或 index.css 文件');
@@ -135,15 +172,6 @@ class createHtml implements vscode.CustomTextEditorProvider {
     }
 
     /**
-     * 获取文件路径
-     * @param fileName 文件名
-     * @returns 文件路径
-     */
-    private getFilePath(fileName: string): string {
-        return isDevelopment ? path.join(this.extUri.fsPath, 'vsmud_vue/dev', fileName) : path.join(this.extUri.fsPath, 'vsmud_vue/dist', fileName);
-    }
-
-    /**
      * 连接到 Telnet 服务器
      * @param ip - Telnet 服务器的 IP 地址
      * @param port - Telnet 服务器的端口号
@@ -153,17 +181,15 @@ class createHtml implements vscode.CustomTextEditorProvider {
     private async telnetToServe(ip: string, port: number, wvPanel: vscode.WebviewPanel): Promise<TelnetClient> {
         // 创建一个 Telnet 客户端实例，传入服务器 IP 地址和端口号
         const client = new TelnetClient(ip, port);
-        // 异步连接到 Telnet 服务器
         await client.connect();
-
         // 监听 Telnet 客户端接收到的数据事件
         client.onData(async (data) => {
             // 打印接收到的 MUD 数据
             console.log('mud数据：', data);
-            // 调用封装后的 asciiToString 函数
             const normalStr = stripAnsi(data);
-            // 遍历所有触发器
-            this.triggers.forEach((tri: any) => {
+            // 将接收到的 MUD 数据发送到 Webview 面板
+            wvPanel.webview.postMessage({ type: 'mud', datas: data });
+            for (const tri of this.triggers) {
                 // 根据触发器的正则表达式创建一个正则对象
                 const reg = new RegExp(tri.reg);
                 // 检查接收到的数据是否匹配触发器的正则表达式
@@ -178,9 +204,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
                     cmd += '\r\n';
                     wvPanel.webview.postMessage({ type: 'cmd', datas: cmd });
                 }
-            });
-            // 将接收到的 MUD 数据发送到 Webview 面板
-            wvPanel.webview.postMessage({ type: 'mud', datas: data });
+            }
         });
 
         // 监听 Webview 面板关闭事件，当面板关闭时断开 Telnet 连接
