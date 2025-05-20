@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as vm from 'vm';
 import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 import { TelnetClient } from './telnetClient';
 import { Files } from './files';
@@ -21,13 +20,24 @@ console.log('当前环境:', isDevelopment ? '开发环境' : '生产环境');
  * 创建 HTML 编辑器类
  * 实现了一个自定义文本编辑器，用于在 Visual Studio Code 中显示和编辑 HTML 文件
  */
+import vm from 'vm';
+
+// 定义触发器类型
+type TriggerType = {
+    reg: string;
+    cmd?: string;
+    onSuccess?: () => string;
+};
+
 class createHtml implements vscode.CustomTextEditorProvider {
+    // 明确 triggers 数组类型
+    private triggers: TriggerType[] = [];
     private extUri: vscode.Uri; // 扩展 URI
     private context: vscode.ExtensionContext; // 扩展上下文
     private fileContent: any; // 文件内容
     private telnet: TelnetClient | undefined; // Telnet 客户端
     // 定义 triggers 数组元素的类型
-    private triggers: { reg: string; cmd?: string; onSuccess?: () => string }[] = [];
+    // private triggers: { reg: string; cmd?: string; onSuccess?: () => string }[] = [];
     private files: Files; // 文件操作实例
     private document: vscode.TextDocument;
     private commands: any;
@@ -41,31 +51,54 @@ class createHtml implements vscode.CustomTextEditorProvider {
         this.commands = new Commands();
     }
     private async reloadTriggers(): Promise<boolean | null> {
-        // 构建触发器脚本文件的路径
-        const targetPath = path.join(__dirname, '../../vsmud/script/trigger.js');
+        try {
+            const scriptDir = path.join(__dirname, '../../vsmud/script/');
+            // 读取目录内容
+            const files = await fs.readdir(scriptDir);
+            const targetFiles = files.filter((file) => file.includes('trigger') || file.includes('alias'));
 
-        // 异步读取触发器脚本文件内容
-        const [code, err] = await handleError(fs.readFile(targetPath, 'utf8'));
-        // 若读取过程中出现错误，返回 null
-        if (err) {
+            for (const file of targetFiles) {
+                const filePath = path.join(scriptDir, file);
+                // 读取文件内容
+                const code = await fs.readFile(filePath, 'utf8');
+
+                // 创建一个上下文对象，注入 require 函数
+                const context = {
+                    require: require,
+                    console: console,
+                    module: { exports: {} },
+                    exports: {}
+                };
+
+                // 创建一个新的沙箱环境
+                const sandbox = vm.createContext(context);
+
+                // 创建 vm.Script 实例
+                const script = new vm.Script(code);
+
+                // 在沙箱环境中运行脚本
+                script.runInContext(sandbox);
+
+                // 获取模块导出内容
+                const moduleExports = sandbox.module.exports;
+
+                // 检查模块导出内容是否符合 TriggerType 类型
+                if (moduleExports && typeof moduleExports.reg === 'string') {
+                    // 将符合类型的内容添加到 triggers 数组
+                    this.triggers.push(moduleExports as TriggerType);
+                }
+            }
+
+            console.log(this.triggers);
+
+            // 移除对 Triggers 属性的访问
+            // ...
+
+            return true;
+        } catch (error) {
+            console.error('读取文件出错:', error);
             return null;
         }
-
-        // 初始化一个模拟的 Node.js 模块对象，用于执行脚本时存储导出内容
-        const module: { exports: { Triggers: () => any } } = { exports: { Triggers: () => [] } };
-        // 创建一个 vm.Script 实例，用于后续在隔离环境中执行脚本
-        const script = new vm.Script(code!);
-        // 创建一个上下文对象，模拟 Node.js 环境，包含 module、require 和 exports
-        const context = vm.createContext({ module, require, exports: module.exports });
-        // 在创建的上下文中执行脚本
-        script.runInContext(context);
-        // 从模块导出中获取更新后的触发器配置并赋值给类的 triggers 属性
-        this.triggers = module.exports.Triggers();
-        // 打印重新加载成功的日志以及更新后的触发器配置
-        console.log('Triggers 已重新加载', this.triggers);
-
-        // 重新加载成功，返回 true
-        return true;
     }
 
     /**

@@ -20,7 +20,6 @@ module.exports = {
 			...defaultTrigger,
 			reg: '你「嘿嘿嘿」奸笑了几声。',
 			onSuccess: () => {
-				console.log(a.abc());
 				return 'haha';
 			},
 		});

@@ -1,3 +1,3 @@
-export const abc = ()=>{
-	console.log('abc')
+export default function abc() {
+	console.log('abc');
 }
