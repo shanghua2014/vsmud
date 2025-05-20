@@ -4,7 +4,6 @@ import * as vm from 'vm';
 import { promises as fs } from 'fs'; // 使用 fs/promises 模块
 import { TelnetClient } from './telnetClient';
 import { Files } from './files';
-import { Triggers } from '../../script/trigger'; // 导入 Triggers 函数
 import { handleError, stripAnsi } from '../tools/utils';
 import { Commands } from './commands';
 
@@ -36,10 +35,29 @@ class createHtml implements vscode.CustomTextEditorProvider {
         this.extUri = extensionUri;
         this.context = context;
         this.fileContent = '';
-        this.triggers = Triggers();
         this.files = new Files(context);
         this.document = '' as any;
         this.commands = new Commands();
+    }
+    private async reloadTriggers2(): Promise<boolean | null> {
+        try {
+            // 获取模块的解析路径
+            const modulePath = require.resolve('../../script/trigger');
+            // 清空该模块的缓存
+            if (require.cache[modulePath]) {
+                delete require.cache[modulePath];
+            }
+            // 加载模块
+            const aa = require('../../script/trigger');
+            console.log('aa:', aa.Triggers()[0]);
+            // 再次清空该模块的缓存，模拟“卸载”操作
+            if (require.cache[aa]) {
+                delete require.cache[aa];
+            }
+        } catch (error) {
+            console.error('重新加载或卸载模块时出错:', error);
+        }
+        return true;
     }
 
     /**
@@ -47,33 +65,6 @@ class createHtml implements vscode.CustomTextEditorProvider {
      * 该方法会读取触发器脚本文件，执行脚本并更新当前的触发器配置
      * @returns 重新加载成功返回 true，出现错误返回 null
      */
-    private async reloadTriggers(): Promise<boolean | null> {
-        // 构建触发器脚本文件的路径
-        const targetPath = path.join(__dirname, '../../vsmud/script/trigger.js');
-
-        // 异步读取触发器脚本文件内容
-        const [code, err] = await handleError(fs.readFile(targetPath, 'utf8'));
-        // 若读取过程中出现错误，返回 null
-        if (err) {
-            return null;
-        }
-
-        // 初始化一个模拟的 Node.js 模块对象，用于执行脚本时存储导出内容
-        const module: { exports: { Triggers: () => any } } = { exports: { Triggers: () => [] } };
-        // 创建一个 vm.Script 实例，用于后续在隔离环境中执行脚本
-        const script = new vm.Script(code!);
-        // 创建一个上下文对象，模拟 Node.js 环境，包含 module、require 和 exports
-        const context = vm.createContext({ module, require, exports: module.exports });
-        // 在创建的上下文中执行脚本
-        script.runInContext(context);
-        // 从模块导出中获取更新后的触发器配置并赋值给类的 triggers 属性
-        this.triggers = module.exports.Triggers();
-        // 打印重新加载成功的日志以及更新后的触发器配置
-        // console.log('Triggers 已重新加载', this.triggers);
-
-        // 重新加载成功，返回 true
-        return true;
-    }
 
     private messageHandlers: { [key: string]: (message: any, document: vscode.TextDocument, wvPanel: vscode.WebviewPanel) => Promise<void> | void } = {
         // 发送命令
@@ -87,14 +78,16 @@ class createHtml implements vscode.CustomTextEditorProvider {
         //         this.telnet?.sendData(message.content);
         //     }
         // },
-        // 执行命令
+        // 发送命令
         command: async (message: any, document: vscode.TextDocument, wvPanel: vscode.WebviewPanel) => {
             await this.commands.command({
                 message: message,
                 files: this.files,
+                document: document,
+                wvPanel: wvPanel,
                 telnet: this.telnet,
-                reload: () => {
-                    this.reloadTriggers();
+                reload: async () => {
+                    // await this.reloadTriggers2();
                 },
                 reconnect: () => {
                     this.telnetToServe(message.content.ip, message.content.port, wvPanel);
@@ -223,7 +216,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>VSMUD客户端</title>
             <style>${imports.css}</style>
-            <script>window.customParent = acquireVsCodeApi();</script>
+            <script>const aaa = 1;window.customParent = acquireVsCodeApi();</script>
         </head>
         <body>
             <div id="app"></div>

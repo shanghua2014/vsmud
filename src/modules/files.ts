@@ -62,9 +62,9 @@ export class Files {
         // 遍历文件列表，创建或更新文件
         for (const file of filesToCreate) {
             const filePath = path.join(targetDirPath, file.name); // 构建文件路径
-            const gitFilePath = path.join(targetDirPath, file.name + '.git'); // 构建 .git 文件路径，不创建.git 打开文件会报错
+            // const gitFilePath = path.join(targetDirPath, file.name + '.git'); // 构建 .git 文件路径，不创建.git 打开文件会报错
             await this.ensureFileExists(filePath, file.content); // 确保文件存在并写入内容
-            await this.ensureFileExists(gitFilePath, ''); // 创建空的 .git 文件
+            // await this.ensureFileExists(gitFilePath, ''); // 创建空的 .git 文件
         }
 
         const configFilePath = path.join(targetDirPath, 'config.json'); // 构建配置文件路径
@@ -160,7 +160,26 @@ export class Files {
         for (const entry of entries) {
             if (entry.isFile() && entry.name.endsWith('.js')) {
                 const sourcePath = path.join(sourceDir, entry.name);
-                const targetPath = path.join(targetDir, entry.name);
+                let targetPath: string;
+                // 检查文件名是否包含 trigger 或 alias
+                if (entry.name.includes('trigger') || entry.name.includes('alias')) {
+                    // 生成 4 位随机数
+                    const randomNum = Math.floor(1000 + Math.random() * 9000);
+                    const ext = path.extname(entry.name);
+                    const baseName = path.basename(entry.name, ext);
+                    const newFileName = `${randomNum}_${baseName}${ext}`;
+                    targetPath = path.join(targetDir, newFileName);
+                } else {
+                    targetPath = path.join(targetDir, entry.name);
+                }
+
+                // 查找并删除目标目录中包含指定文件名的文件
+                const filesToDelete = await this.findFiles(targetDir, entry.name);
+                // 执行删除操作
+                for (const filePath of filesToDelete) {
+                    await handleError(fs.unlink(filePath));
+                    console.log(`已删除目标文件: ${path.basename(filePath)}`);
+                }
 
                 const [content, readErr] = await handleError(fs.readFile(sourcePath, 'utf8'));
                 if (readErr || content === null) {
@@ -172,12 +191,36 @@ export class Files {
                     continue;
                 }
 
-                console.log(`${entry.name} 复制成功`);
+                console.log(`${path.basename(targetPath)} 复制成功`);
                 success = true;
             }
         }
 
         return success;
+    }
+
+    /**
+
+     * 查找目标目录中包含指定文件名的文件
+     * @param targetDir 目标目录路径
+
+
+     * @param fileName 指定的文件名（可包含扩展名）
+     * @returns 包含指定文件名的文件路径数组
+     */
+
+    private async findFiles(targetDir: string, fileName: string): Promise<string[]> {
+        const filesToDelete: string[] = [];
+        const [targetEntries, targetErr] = await handleError(fs.readdir(targetDir, { withFileTypes: true }));
+        if (!targetErr && targetEntries) {
+            for (const targetEntry of targetEntries) {
+                if (targetEntry.isFile() && targetEntry.name.endsWith(fileName)) {
+                    const filePath = path.join(targetDir, targetEntry.name);
+                    filesToDelete.push(filePath);
+                }
+            }
+        }
+        return filesToDelete;
     }
 
     /**
