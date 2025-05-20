@@ -162,16 +162,8 @@ export class Files {
                 const sourcePath = path.join(sourceDir, entry.name);
                 let targetPath: string;
                 // 检查文件名是否包含 trigger 或 alias
-                if (entry.name.includes('trigger') || entry.name.includes('alias')) {
-                    // 生成 4 位随机数
-                    const randomNum = Math.floor(1000 + Math.random() * 9000);
-                    const ext = path.extname(entry.name);
-                    const baseName = path.basename(entry.name, ext);
-                    const newFileName = `${randomNum}_${baseName}${ext}`;
-                    targetPath = path.join(targetDir, newFileName);
-                } else {
-                    targetPath = path.join(targetDir, entry.name);
-                }
+
+                targetPath = path.join(targetDir, entry.name);
 
                 // 查找并删除目标目录中包含指定文件名的文件
                 const filesToDelete = await this.findFiles(targetDir, entry.name);

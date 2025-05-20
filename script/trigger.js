@@ -18,10 +18,10 @@ module.exports = {
 		// 合并默认值和自定义值添加触发器
 		tr.push({
 			...defaultTrigger,
-			reg: '你「哈哈」大笑几声。',
+			reg: '你「嘿嘿嘿」奸笑了几声。',
 			onSuccess: () => {
-				a.abc();
-				return 'hehe';
+				console.log(a.abc());
+				return 'haha';
 			},
 		});
 

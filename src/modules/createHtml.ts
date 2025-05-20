@@ -26,7 +26,8 @@ class createHtml implements vscode.CustomTextEditorProvider {
     private context: vscode.ExtensionContext; // 扩展上下文
     private fileContent: any; // 文件内容
     private telnet: TelnetClient | undefined; // Telnet 客户端
-    private triggers: any; // 触发器
+    // 定义 triggers 数组元素的类型
+    private triggers: { reg: string; cmd?: string; onSuccess?: () => string }[] = [];
     private files: Files; // 文件操作实例
     private document: vscode.TextDocument;
     private commands: any;
@@ -39,24 +40,31 @@ class createHtml implements vscode.CustomTextEditorProvider {
         this.document = '' as any;
         this.commands = new Commands();
     }
-    private async reloadTriggers2(): Promise<boolean | null> {
-        try {
-            // 获取模块的解析路径
-            const modulePath = require.resolve('../../script/trigger');
-            // 清空该模块的缓存
-            if (require.cache[modulePath]) {
-                delete require.cache[modulePath];
-            }
-            // 加载模块
-            const aa = require('../../script/trigger');
-            console.log('aa:', aa.Triggers()[0]);
-            // 再次清空该模块的缓存，模拟“卸载”操作
-            if (require.cache[aa]) {
-                delete require.cache[aa];
-            }
-        } catch (error) {
-            console.error('重新加载或卸载模块时出错:', error);
+    private async reloadTriggers(): Promise<boolean | null> {
+        // 构建触发器脚本文件的路径
+        const targetPath = path.join(__dirname, '../../vsmud/script/trigger.js');
+
+        // 异步读取触发器脚本文件内容
+        const [code, err] = await handleError(fs.readFile(targetPath, 'utf8'));
+        // 若读取过程中出现错误，返回 null
+        if (err) {
+            return null;
         }
+
+        // 初始化一个模拟的 Node.js 模块对象，用于执行脚本时存储导出内容
+        const module: { exports: { Triggers: () => any } } = { exports: { Triggers: () => [] } };
+        // 创建一个 vm.Script 实例，用于后续在隔离环境中执行脚本
+        const script = new vm.Script(code!);
+        // 创建一个上下文对象，模拟 Node.js 环境，包含 module、require 和 exports
+        const context = vm.createContext({ module, require, exports: module.exports });
+        // 在创建的上下文中执行脚本
+        script.runInContext(context);
+        // 从模块导出中获取更新后的触发器配置并赋值给类的 triggers 属性
+        this.triggers = module.exports.Triggers();
+        // 打印重新加载成功的日志以及更新后的触发器配置
+        console.log('Triggers 已重新加载', this.triggers);
+
+        // 重新加载成功，返回 true
         return true;
     }
 
@@ -87,7 +95,7 @@ class createHtml implements vscode.CustomTextEditorProvider {
                 wvPanel: wvPanel,
                 telnet: this.telnet,
                 reload: async () => {
-                    // await this.reloadTriggers2();
+                    await this.reloadTriggers();
                 },
                 reconnect: () => {
                     this.telnetToServe(message.content.ip, message.content.port, wvPanel);
@@ -183,19 +191,22 @@ class createHtml implements vscode.CustomTextEditorProvider {
             // 将接收到的 MUD 数据发送到 Webview 面板
             wvPanel.webview.postMessage({ type: 'mud', datas: data });
             for (const tri of this.triggers) {
-                // 根据触发器的正则表达式创建一个正则对象
-                const reg = new RegExp(tri.reg);
-                // 检查接收到的数据是否匹配触发器的正则表达式
-                if (reg.test(normalStr)) {
-                    let cmd: any = '';
-                    if (tri.cmd) {
-                        cmd = `${tri.cmd}`;
+                // 检查 tri 是否具有 reg 属性
+                if (tri && tri.reg) {
+                    // 根据触发器的正则表达式创建一个正则对象
+                    const reg = new RegExp(tri.reg);
+                    // 检查接收到的数据是否匹配触发器的正则表达式
+                    if (reg.test(normalStr)) {
+                        let cmd: string = '';
+                        if (tri.cmd) {
+                            cmd = tri.cmd;
+                        }
+                        if (tri.onSuccess) {
+                            cmd = tri.onSuccess();
+                        }
+                        cmd += '\r\n';
+                        wvPanel.webview.postMessage({ type: 'cmd', datas: cmd });
                     }
-                    if (tri.onSuccess) {
-                        cmd = `${tri.onSuccess()}`;
-                    }
-                    cmd += '\r\n';
-                    wvPanel.webview.postMessage({ type: 'cmd', datas: cmd });
                 }
             }
         });
